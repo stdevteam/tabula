@@ -1,5 +1,7 @@
 require 'java'
 java_import java.util.concurrent.ThreadPoolExecutor
+java_import java.lang.Runnable
+java_import java.util.concurrent.Executors
 java_import java.util.concurrent.TimeUnit
 java_import java.util.concurrent.LinkedBlockingQueue
 
@@ -11,6 +13,15 @@ require 'singleton'
 module Tabula
   module Background
 
+    # disposes completed jobs
+    class Cleaner
+      include Runnable
+      def run
+        # XXX TODO
+        # delete completed jobs from JobExecutor.instance.jobs and JobExecutor.instance.futures_jobs
+      end
+    end
+
     class JobExecutor < java.util.concurrent.ThreadPoolExecutor
       include Singleton
 
@@ -20,6 +31,11 @@ module Tabula
         @jobs = Hash.new.extend(JRuby::Synchronized)
         @futures_jobs = Hash.new.extend(JRuby::Synchronized)
 
+        @cleanerScheduledExecutor = Executors.newSingleThreadScheduledExecutor
+        @cleanerScheduledExecutor.scheduleAtFixedRate(Cleaner.new,
+                                                      2,
+                                                      1,
+                                                      TimeUnit::SECONDS)
         super(3, # core pool size
               5, # max pool size
               300, # keep idle threads 5 minutes
@@ -27,6 +43,8 @@ module Tabula
               LinkedBlockingQueue.new)
 
         at_exit do
+          @cleanerScheduledExecutor.shutdown
+          @cleanerScheduledExecutor.shutdownNow
           self.shutdown
           self.shutdownNow
         end
@@ -50,7 +68,6 @@ module Tabula
             # task finished OK
             @futures_jobs[runnable].completed
           else
-            throwable.printStackTrace(java.lang.System.out)
             # finished with exception
             throwable.printStackTrace # XXX TODO better exception logging
             @futures_jobs[runnable].failed(throwable.toString)
@@ -158,15 +175,18 @@ module Tabula
   end
 end
 
-
+# just for testing
 if __FILE__ == $0
+  require 'thread'
+
+  $sem = Mutex.new
 
   class K < Tabula::Background::Job
     def perform
       options[:start].upto(options[:end]) do |i|
         puts "I'm #{@uuid}: #{i}/#{options[:end]}"
         at(i, options[:end])
-        sleep 1
+        sleep 0.5
       end
       @uuid
     end
@@ -177,25 +197,12 @@ if __FILE__ == $0
       options[:start].upto(options[:end]) do |i|
         puts "I'm #{@uuid}: #{i}/#{options[:end]}"
         at(i, options[:end])
-        raise 'caca'
         sleep 1
       end
     end
   end
 
-  j1 = K.create(:start => 1, :end => 20)
-  j2 = K.create(:start => 25, :end => 40)
-  j3 = J.create(:start => 1, :end => 6)
-
-  Thread.new do
-    loop {
-      puts "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-
-      # puts "STATUS OF J1 IN EXECUTOR: #{Tabula::Background::JobExecutor.get(j1)}"
-      # puts "STATUS OF J2 IN EXECUTOR: #{Tabula::Background::JobExecutor.get(j2)}"
-      # puts "STATUS OF J3 IN EXECUTOR: #{Tabula::Background::JobExecutor.get(j3)}"
-      puts Tabula::Background::JobExecutor.instance.futures_jobs.inspect
-      sleep 1
-    }
-  end
+  K.create(:start => 1, :end => 20)
+  K.create(:start => 25, :end => 40)
+  J.create(:start => 1, :end => 6)
 end
