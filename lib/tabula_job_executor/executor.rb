@@ -11,6 +11,8 @@ require 'securerandom'
 require 'singleton'
 
 module Tabula
+  class NoTextDataException < IOError; end
+
   module Background
 
     # disposes completed jobs
