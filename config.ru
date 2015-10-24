@@ -1,7 +1,8 @@
 # encoding: UTF-8
-require 'rubygems'
 require 'bundler'
-Bundler.require
+Bundler.setup
+require 'jbundler'
+
 require_relative './webapp/tabula_settings.rb'
 require_relative './webapp/tabula_web.rb'
 run Cuba

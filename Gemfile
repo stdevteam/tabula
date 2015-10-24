@@ -7,6 +7,7 @@ platform :jruby do
   gem "cuba"
   gem "rack"
   gem "tilt"
+  gem "jbundler"
 
   group :development do
     gem "rake"
